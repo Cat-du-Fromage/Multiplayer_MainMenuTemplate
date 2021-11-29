@@ -17,6 +17,14 @@ namespace KaizerWaldCode
         GenericDisconnect,        //server disconnected, but no specific reason given.
     }
     
+    [Serializable]
+    public class ConnectionPayload
+    {
+        public string clientGUID;
+        public int clientScene = -1;
+        public string playerName;
+    }
+    
     /// <remarks>
     /// Why is there a C2S_ConnectFinished event here? How is that different from the "ApprovalCheck" logic that MLAPI optionally runs
     /// when establishing a new client connection?
@@ -37,8 +45,8 @@ namespace KaizerWaldCode
         
         public static GameNetPortal Instance;
         
-        private ClientGameNetPortal clientPortal;
-        private ServerGameNetPortal serverPortal;
+        public ClientGameNetPortal clientPortal;
+        public ServerGameNetPortal serverPortal;
 
         private void Awake()
         {
@@ -50,6 +58,7 @@ namespace KaizerWaldCode
         void Start()
         {
             DontDestroyOnLoad(gameObject);
+            networkManager ??= FindObjectOfType<NetworkManager>();
             networkManager.OnServerStarted += OnNetworkReady; //coming from startHost from MainMenuNetWork.cs
             networkManager.OnClientConnectedCallback += ClientNetworkReadyWrapper;
         }
@@ -95,6 +104,18 @@ namespace KaizerWaldCode
                 //clientPortal.OnConnectFinished(ConnectStatus.Success);
                 serverPortal.OnNetworkReady(); // => Go to ServerNetPortal.cs
             }
+        }
+        
+        
+        /// <summary>
+        /// This will disconnect (on the client) or shutdown the server (on the host).
+        /// It's a local signal (not from the network), indicating that the user has requested a disconnect.
+        /// </summary>
+        public void RequestDisconnect()
+        {
+            //clientPortal.OnUserDisconnectRequest(); => no need for disconnect reason yet
+            serverPortal.OnUserDisconnectRequest();
+            networkManager.Shutdown();
         }
     }
 }

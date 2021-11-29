@@ -1,3 +1,4 @@
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using Unity.Netcode;
@@ -6,6 +7,8 @@ using UnityEngine.SceneManagement;
 
 namespace KaizerWaldCode
 {
+    
+    
     [RequireComponent(typeof(GameNetPortal))]
     public class ServerGameNetPortal : MonoBehaviour
     {
@@ -36,6 +39,9 @@ namespace KaizerWaldCode
         {
             portal = GetComponent<GameNetPortal>();
             NetworkManager.Singleton.ConnectionApprovalCallback += ApprovalCallback;
+            NetworkManager.Singleton.OnServerStarted += ServerStartedHandler;
+            clientData = new Dictionary<string, PlayerData>();
+            clientIDToGuid = new Dictionary<ulong, string>();
         }
         
         /// <summary>
@@ -91,6 +97,20 @@ namespace KaizerWaldCode
         }
         
         /// <summary>
+        /// Handles the flow when a user has requested a disconnect via UI (which can be invoked on the Host, and thus must be
+        /// handled in server code).
+        /// </summary>
+        public void OnUserDisconnectRequest() => Clear();
+
+        private void Clear()
+        {
+            //resets all our runtime state.
+            clientData.Clear();
+            clientIDToGuid.Clear();
+            clientSceneMap.Clear();
+        }
+        
+        /// <summary>
         /// CAREFUL use only this if you want to restrict connection!
         /// for exemple :Password or number of player
         /// </summary>
@@ -108,8 +128,62 @@ namespace KaizerWaldCode
             }
 
             basePosition.x += clientId * 1.5f;
-            callback(true, null, true, basePosition, null);
             
+            
+            //Test for Duplicate Login.
+            string payload = System.Text.Encoding.UTF8.GetString(connectionData);
+            ConnectionPayload connectionPayload = JsonUtility.FromJson<ConnectionPayload>(payload); // https://docs.unity3d.com/2020.2/Documentation/Manual/JSONSerialization.html
+//clientScene : {connectionPayload.clientScene.ToString()}; 
+            Debug.Log($"playerName : {connectionPayload.playerName.ToString()}; clientGUID : {connectionPayload.clientGUID.ToString()};");
+            
+            int clientScene = connectionPayload.clientScene;
+
+            Dictionary<string, PlayerData>.KeyCollection.Enumerator test = clientData.Keys.GetEnumerator();
+            while (test.MoveNext())
+                Debug.Log($"Same Guid : {test.Current}");
+            
+            if (clientData.ContainsKey(connectionPayload.clientGUID))
+            {
+                if (Debug.isDebugBuild)
+                {
+                    Debug.Log($"Client GUID {connectionPayload.clientGUID} already exists. Because this is a debug build, we will still accept the connection");
+                    while (clientData.ContainsKey(connectionPayload.clientGUID)) { connectionPayload.clientGUID += "_Secondary"; }
+                }
+                else
+                {
+                    Debug.Log($"Same Guid : {clientData.ContainsKey(connectionPayload.clientGUID)}");
+                    ulong oldClientId = clientData[connectionPayload.clientGUID].ClientID;
+                    // kicking old client to leave only current
+                    //SendServerToClientSetDisconnectReason(oldClientId, ConnectStatus.LoggedInAgain);
+                    StartCoroutine(WaitToDisconnect(clientId));
+                    return;
+                }
+            }
+            //Populate our dictionaries with the playerData
+            clientSceneMap[clientId] = clientScene;
+            clientIDToGuid[clientId] = connectionPayload.clientGUID;
+            clientData[connectionPayload.clientGUID] = new PlayerData(connectionPayload.playerName, clientId);
+            
+            callback(true, null, true, basePosition, null);
+        }
+        
+        private IEnumerator WaitToDisconnect(ulong clientId)
+        {
+            yield return new WaitForSeconds(0.5f);
+            portal.networkManager.DisconnectClient(clientId);
+        }
+        
+        private void ServerStartedHandler()
+        {
+            clientData.Add("host_guid", new PlayerData("HOST", NetworkManager.Singleton.LocalClientId));
+            clientIDToGuid.Add(NetworkManager.Singleton.LocalClientId, "host_guid");
+
+            //AssignPlayerName(NetworkManager.Singleton.LocalClientId, "HOST");
+
+            // server spawns game state
+            //var gameState = Instantiate(m_GameState);
+
+            //gameState.Spawn();
         }
 
         /// <summary>

@@ -26,7 +26,8 @@ namespace KaizerWaldCode
         
         public void Client()
         {
-            NetworkManager.Singleton.StartClient();
+            //NetworkManager.Singleton.StartClient();
+            ClientGameNetPortal.ConnectClient(gameNetPortal);
         }
     }
 }
