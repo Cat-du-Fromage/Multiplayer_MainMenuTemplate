@@ -1,3 +1,4 @@
+using System;
 using Unity.Netcode;
 using UnityEngine;
 using UnityEngine.SceneManagement;
@@ -12,7 +13,9 @@ namespace KaizerWaldCode.V2
             Instance = this;
         }
         
-        private static void ConnectClient(string playerName)
+        public void OnNetworkReady() => enabled = NetworkManager.Singleton.IsClient;
+
+        public void StartClient(string playerName)
         {
             string clientGuid = ClientPrefs.GetGuid();
             string payload = JsonUtility.ToJson(new ConnectionPayload()
