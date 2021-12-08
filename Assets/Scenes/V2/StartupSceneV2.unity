@@ -447,6 +447,16 @@ PrefabInstance:
       propertyPath: m_Name
       value: NetworkManagerV2
       objectReference: {fileID: 0}
+    - target: {fileID: 4783155215940942210, guid: e608f2add0dc4f9419b81a5223f19a17,
+        type: 3}
+      propertyPath: NetworkConfig.ForceSamePrefabs
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 4783155215940942210, guid: e608f2add0dc4f9419b81a5223f19a17,
+        type: 3}
+      propertyPath: NetworkConfig.EnsureNetworkVariableLengthSafety
+      value: 0
+      objectReference: {fileID: 0}
     - target: {fileID: 4783155215940942211, guid: e608f2add0dc4f9419b81a5223f19a17,
         type: 3}
       propertyPath: m_RootOrder

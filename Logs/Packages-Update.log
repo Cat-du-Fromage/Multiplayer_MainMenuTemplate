@@ -50,3 +50,12 @@ Update Mode: updateDependencies
 
 The following packages were updated:
   com.unity.collab-proxy from version 1.13.5 to 1.15.1
+
+=== Fri Dec  3 17:38:44 2021
+
+Packages were changed.
+Update Mode: updateDependencies
+
+The following packages were updated:
+  com.unity.inputsystem from version 1.1.1 to 1.2.0
+  com.unity.render-pipelines.universal from version 12.1.1 to 12.1.2

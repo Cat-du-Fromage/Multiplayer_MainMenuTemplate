@@ -28,18 +28,22 @@ namespace KaizerWaldCode.V2
             HostButton.onClick.AddListener(OnHostClicked);
             ClientButton.onClick.AddListener(OnClientClicked);
         }
+        
+        //RETRIEVE HOST NAME
+        //private static string clientInputName = string.Empty;
+        //public static string GetInputName() => clientInputName;
 
         private void OnHostClicked()
         {
             if (!ValidNameInput()) return;
-            Debug.Log($"actual name is {nameInputField.text}");
+            //clientInputName = nameInputField.text;
+            gameNetPortal.SaveClientData(nameInputField.text);
             NetworkManager.Singleton.StartHost();
         }
 
         private void OnClientClicked()
         {
             if (!ValidNameInput()) return;
-            Debug.Log($"actual name is {nameInputField.text}");
             clientNetPortal.StartClient(nameInputField.text);
         }
 
@@ -47,7 +51,6 @@ namespace KaizerWaldCode.V2
         {
             if (!string.IsNullOrEmpty(nameInputField.text) && !string.IsNullOrWhiteSpace(nameInputField.text)) return true;
             nameInputField.image.color = Color.red;
-            Debug.Log($"actual name is empty");
             return false;
         }
     }

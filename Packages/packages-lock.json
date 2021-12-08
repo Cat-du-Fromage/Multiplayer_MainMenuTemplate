@@ -1,11 +1,11 @@
 {
   "dependencies": {
     "com.unity.addressables": {
-      "version": "1.19.11",
+      "version": "1.19.13",
       "depth": 0,
       "source": "registry",
       "dependencies": {
-        "com.unity.scriptablebuildpipeline": "1.19.3",
+        "com.unity.scriptablebuildpipeline": "1.19.4",
         "com.unity.modules.assetbundle": "1.0.0",
         "com.unity.modules.imageconversion": "1.0.0",
         "com.unity.modules.jsonserialize": "1.0.0",
@@ -41,14 +41,13 @@
       "url": "https://packages.unity.com"
     },
     "com.unity.collections": {
-      "version": "1.0.0-pre.6",
+      "version": "file:Z:/ProjetPerso/Unity/PackagesOfficial/com.unity.collections@1.0.0-pre.6",
       "depth": 0,
-      "source": "registry",
+      "source": "local",
       "dependencies": {
         "com.unity.burst": "1.5.4",
         "com.unity.test-framework": "1.1.22"
-      },
-      "url": "https://packages.unity.com"
+      }
     },
     "com.unity.ext.nunit": {
       "version": "1.0.6",
@@ -83,7 +82,7 @@
       "url": "https://packages.unity.com"
     },
     "com.unity.inputsystem": {
-      "version": "1.1.1",
+      "version": "1.2.0",
       "depth": 0,
       "source": "registry",
       "dependencies": {
@@ -173,7 +172,7 @@
       }
     },
     "com.unity.scriptablebuildpipeline": {
-      "version": "1.19.3",
+      "version": "1.19.4",
       "depth": 1,
       "source": "registry",
       "dependencies": {},
