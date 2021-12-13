@@ -1,6 +1,7 @@
 using System.Collections;
 using System.Collections.Generic;
 using Unity.Netcode;
+using Unity.Netcode.Components;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 
@@ -20,127 +21,145 @@ namespace KaizerWaldCode.V2
     
     public class ServerNetPortalV2 : MonoBehaviour
     {
-        private Dictionary<string, PlayerData> clientData;
+        [SerializeField]
+        private NetworkObject GameState;
+        
+        private NetworkManager NetworkManager;
+        private GameNetPortalV2 GameNetPortal;
+        private ClientNetPortalV2 ClientPortal;
+        
+        private Dictionary<string, PlayerData> ClientData;
         
         /// <summary>
         /// Map to allow us to cheaply map from guid to player data.
         /// </summary>
-        private Dictionary<ulong, string> clientIDToGuid;
+        private Dictionary<ulong, string> ClientIDToGuid;
         
         /// <summary>
         /// Keeps a list of what clients are in what scenes.
         /// </summary>
-        private Dictionary<ulong, int> clientSceneMap = new Dictionary<ulong, int>();
+        private Dictionary<ulong, int> ClientSceneMap = new Dictionary<ulong, int>();
         
         /// <summary>
         /// The active server scene index.
         /// </summary>
-        public int ServerScene => SceneManager.GetActiveScene().buildIndex;
+        private int ServerScene => SceneManager.GetActiveScene().buildIndex;
 
         public static ServerNetPortalV2 Instance;
 
-        public void DebugPlayerData()
+        private void DebugPlayerData()
         {
-            foreach (KeyValuePair<string, PlayerData> v in clientData)
-            {
-                Debug.Log($"Player connected : Key = {v.Key} ClientID = {v.Value.ClientID} PlayerName = {v.Value.PlayerName}");
-            }
+            foreach (KeyValuePair<string, PlayerData> v in ClientData)
+                NetworkLog.LogInfoServer($"Player connected : Key = {v.Key} ClientID = {v.Value.ClientID} PlayerName = {v.Value.PlayerName}");
         }
         
-        private void Awake()
-        {
-            Instance = this;
-        }
-        
+        private void Awake() => Instance = this;
+
         private void Start()
         {
-            GameNetPortalV2.Instance.OnNetworkReadied += OnNetworkReady;
-            NetworkManager.Singleton.ConnectionApprovalCallback += ApprovalCheck;
-            clientData = new Dictionary<string, PlayerData>();
-            clientIDToGuid = new Dictionary<ulong, string>();
+            //Initialization Part
+            NetworkManager = NetworkManager.Singleton;
+            GameNetPortal = GetComponent<GameNetPortalV2>();
+            ClientPortal = GetComponent<ClientNetPortalV2>();
+            //Events
+            GameNetPortal.OnNetworkReadied += OnNetworkReady;
+            NetworkManager.ConnectionApprovalCallback += ApprovalCheck;
+            //Init Dictionaries
+            ClientData = new Dictionary<string, PlayerData>();
+            ClientIDToGuid = new Dictionary<ulong, string>();
         }
         
         private void OnDestroy()
         {
-            if (GameNetPortalV2.Instance is null) return;
-            GameNetPortalV2.Instance.OnNetworkReadied -= OnNetworkReady;
-            if (NetworkManager.Singleton is null) return;
-            NetworkManager.Singleton.ConnectionApprovalCallback -= ApprovalCheck;
+            if (GameNetPortal is null) return;
+            GameNetPortal.OnNetworkReadied -= OnNetworkReady;
+            if (NetworkManager is null) return;
+            NetworkManager.ConnectionApprovalCallback -= ApprovalCheck;
         }
 
         private void OnNetworkReady()
         {
-            if (!NetworkManager.Singleton.IsServer)
-            {
-                enabled = false;
-            }
-            else
-            {
-                SetDisconnectEvents(true);
-                
-                NetworkManager.Singleton.SceneManager.LoadScene("LobbySceneV2", LoadSceneMode.Single);
+            enabled = NetworkManager.IsServer;
 
-                if(NetworkManager.Singleton.IsHost)
-                {
-                    clientSceneMap[NetworkManager.Singleton.LocalClientId] = ServerScene;
-                }
-            }
+            if(NetworkManager.IsHost)
+                ClientSceneMap[NetworkManager.LocalClientId] = ServerScene;
+
+            if (!NetworkManager.IsServer) return;
+            
+            SetDisconnectEvents(true);
+                
+            NetworkManager.SceneManager.LoadScene(GameScene.Lobby, LoadSceneMode.Single);
         }
         
         public PlayerData? GetPlayerData(ulong clientId)
         {
             //First see if we have a guid matching the clientID given.
 
-            if (clientIDToGuid.TryGetValue(clientId, out string clientguid))
+            if (ClientIDToGuid.TryGetValue(clientId, out string clientGuid))
             {
-                if (clientData.TryGetValue(clientguid, out PlayerData data))
-                {
-                    return data;
-                }
-                else
-                {
-                    Debug.Log("No PlayerData of matching guid found");
-                }
+                if (ClientData.TryGetValue(clientGuid, out PlayerData data)) return data;
+                NetworkLog.LogInfoServer("No PlayerData of matching guid found");
             }
             else
             {
-                Debug.Log("No client guid found mapped to the given client ID");
+                NetworkLog.LogInfoServer("No client guid found mapped to the given client ID");
             }
             return null;
         }
 
         private void ApprovalCheck(byte[] connectionData, ulong clientId, NetworkManager.ConnectionApprovedDelegate connectionApprovedCallback)
         {
-            DebugPlayerData();
             string payload = System.Text.Encoding.UTF8.GetString(connectionData);
             ConnectionPayload connectionPayload = JsonUtility.FromJson<ConnectionPayload>(payload); 
             int clientScene = connectionPayload.clientScene;
+            
             // Approval check happens for Host too, but obviously we want it to be approved
-            if (clientId == NetworkManager.Singleton.LocalClientId)
+            if (clientId == NetworkManager.LocalClientId)
             {
                 connectionApprovedCallback(false, null, true, null, null);
+                NetworkLog.LogInfoServer($"ApprovalCheck Host : {clientId} {NetworkManager.LocalClientId}");
                 RegisterClientData(clientId, clientScene, connectionPayload);
                 return;
             }
             
-            
-            
-            // 1) MUST check if player Guid not already taken
-            RegisterClientData(clientId, clientScene, connectionPayload);
-            //Populate our dictionaries with the playerData
-            
-            
-            connectionApprovedCallback(false, null, true, null, null);
+            //Test for Duplicate Login(with GUID).
+            if (ClientData.ContainsKey(connectionPayload.clientGUID))
+            {
+                if (Debug.isDebugBuild)
+                {
+                    NetworkLog.LogInfoServer($"Client GUID {connectionPayload.clientGUID} already exists. Because this is a debug build, we will still accept the connection");
+                    while (ClientData.ContainsKey(connectionPayload.clientGUID)) { connectionPayload.clientGUID += "_Secondary"; }
+                }
+                else
+                {
+                    NetworkLog.LogInfoServer($"We got a duplicate!");
+                    ulong oldClientId = ClientData[connectionPayload.clientGUID].ClientID;
+                    // kicking old client to leave only current
+                    StartCoroutine(WaitToDisconnect(clientId));
+                    return;
+                }
+            }
+
             DebugPlayerData();
+            RegisterClientData(clientId, clientScene, connectionPayload);
+            connectionApprovedCallback(false, null, true, null, null);
+        }
+        
+        private IEnumerator WaitToDisconnect(ulong clientId)
+        {
+            yield return new WaitForSeconds(0.5f);
+            NetworkManager.DisconnectClient(clientId);
         }
 
         private void RegisterClientData(ulong clientId, int clientScene, ConnectionPayload connectionPayload)
         {
-            clientSceneMap[clientId] = clientScene;
-            clientIDToGuid[clientId] = connectionPayload.clientGUID;
-            clientData[connectionPayload.clientGUID] = new PlayerData(connectionPayload.playerName, clientId);
+            ClientSceneMap[clientId] = clientScene;
+            ClientIDToGuid[clientId] = connectionPayload.clientGUID;
+            ClientData[connectionPayload.clientGUID] = new PlayerData(connectionPayload.playerName, clientId);
         }
         
+        public void StartGame() => NetworkManager.Singleton.SceneManager.LoadScene(GameScene.Game, LoadSceneMode.Single);
+
 //DISCONNECT RELATED
 //======================================================================================================================
 
@@ -164,41 +183,38 @@ namespace KaizerWaldCode.V2
 
         private void ClearData()
         {
-            clientData.Clear();
-            clientIDToGuid.Clear();
-            clientSceneMap.Clear();
+            ClientData.Clear();
+            ClientIDToGuid.Clear();
+            ClientSceneMap.Clear();
         }
         
         private void OnClientDisconnected(ulong clientId)
         {
-            clientSceneMap.Remove(clientId);
+            ClientSceneMap.Remove(clientId);
 
-            if (clientIDToGuid.TryGetValue(clientId, out string guid))
+            if (ClientIDToGuid.TryGetValue(clientId, out string guid))
             {
-                clientIDToGuid.Remove(clientId);
+                ClientIDToGuid.Remove(clientId);
 
-                if (clientData[guid].ClientID == clientId)
+                if (ClientData[guid].ClientID == clientId)
                 {
-                    clientData.Remove(guid);
+                    ClientData.Remove(guid);
                 }
             }
 
-            if (clientId == NetworkManager.Singleton.LocalClientId)
-            {
-                SetDisconnectEvents(false);
-                //gameNetPortal.OnClientSceneChanged -= HandleClientSceneChanged;
-            }
+            if (clientId != NetworkManager.LocalClientId) return; 
+            SetDisconnectEvents(false);
         }
         
         private void OnUserDisconnectRequested()
         {
-            OnClientDisconnected(NetworkManager.Singleton.LocalClientId);
+            OnClientDisconnected(NetworkManager.LocalClientId);
 
-            NetworkManager.Singleton.Shutdown();
+            NetworkManager.Shutdown();
 
             ClearData();
 
-            SceneManager.LoadScene("MainMenuSceneV2");
+            SceneManager.LoadScene(GameScene.MainMenu);
         }
     }
 }

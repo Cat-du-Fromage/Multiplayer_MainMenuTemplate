@@ -7,12 +7,12 @@ namespace KaizerWaldCode
 {
     public class ClientPrefs
     {
-        private const float k_DefaultMasterVolume = 1;
-        private const float k_DefaultMusicVolume = 0.8f;
+        private const float DefaultMasterVolume = 1;
+        private const float DefaultMusicVolume = 0.8f;
 
         public static float GetMasterVolume()
         {
-            return PlayerPrefs.GetFloat("MasterVolume", k_DefaultMasterVolume);
+            return PlayerPrefs.GetFloat("MasterVolume", DefaultMasterVolume);
         }
 
         public static void SetMasterVolume(float volume)
@@ -22,7 +22,7 @@ namespace KaizerWaldCode
 
         public static float GetMusicVolume()
         {
-            return PlayerPrefs.GetFloat("MusicVolume", k_DefaultMusicVolume);
+            return PlayerPrefs.GetFloat("MusicVolume", DefaultMusicVolume);
         }
 
         public static void SetMusicVolume(float volume)

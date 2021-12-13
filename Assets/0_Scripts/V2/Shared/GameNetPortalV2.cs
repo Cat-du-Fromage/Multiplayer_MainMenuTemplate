@@ -9,48 +9,38 @@ namespace KaizerWaldCode.V2
 {
     public class GameNetPortalV2 : MonoBehaviour
     {
-        public static GameNetPortalV2 Instance;
-        private ClientNetPortalV2 clientPortal;
-        private ServerNetPortalV2 serverPortal;
-        
+        public static GameNetPortalV2 Instance { get; private set; }
+
         public event Action OnNetworkReadied;
-        
         public event Action OnUserDisconnectRequested;
-        
-        private void Awake()
-        {
-            Instance = this;
-        }
-        
+
+        private void Awake() => Instance = this;
+
         private void Start()
         {
+            //Initialization Part
             DontDestroyOnLoad(gameObject);
-            clientPortal = ClientNetPortalV2.Instance;
-            serverPortal = ServerNetPortalV2.Instance;
-            
+
+            //Events
             NetworkManager.Singleton.OnServerStarted += OnNetworkReady;
             NetworkManager.Singleton.OnClientConnectedCallback += OnClientConnected;
         }
 
-        private void OnNetworkReady()
-        {
-            OnNetworkReadied?.Invoke();
-        }
-        
         private void OnClientConnected(ulong clientId)
         {
+            //We go through ALL clients so this check is necessary!
             if (clientId != NetworkManager.Singleton.LocalClientId) return;
-            Debug.Log("Connected as client");
+            Debug.Log($"clientId = {clientId} ; NetworkManager.LocalClientId = {NetworkManager.Singleton.LocalClientId}" );
             OnNetworkReady();
-            //NetworkManager.Singleton.SceneManager.OnSceneEvent += HandleSceneEvent;
+            NetworkLog.LogInfoServer($"OnClientConnected {clientId}");
         }
-        
+
+
         public void SaveClientData(string playerName)
         {
-            string clientGuid = ClientPrefs.GetGuid();
             string payload = JsonUtility.ToJson(new ConnectionPayload()
             {
-                clientGUID = clientGuid,
+                clientGUID = ClientPrefs.GetGuid(),
                 clientScene = SceneManager.GetActiveScene().buildIndex,
                 playerName = playerName
             });
@@ -59,11 +49,11 @@ namespace KaizerWaldCode.V2
 
             NetworkManager.Singleton.NetworkConfig.ConnectionData = payloadBytes;
         }
+//EVENTS
+//======================================================================================================================
         
+        public void RequestDisconnect() => OnUserDisconnectRequested?.Invoke();
         
-        public void RequestDisconnect()
-        {
-            OnUserDisconnectRequested?.Invoke();
-        }
+        private void OnNetworkReady() => OnNetworkReadied?.Invoke();
     }
 }

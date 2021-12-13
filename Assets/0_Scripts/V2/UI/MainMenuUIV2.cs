@@ -17,34 +17,29 @@ namespace KaizerWaldCode.V2
         
         //NET PORTALS
         //=======================================
-        private GameNetPortalV2 gameNetPortal;
-        private ClientNetPortalV2 clientNetPortal;
+        private GameNetPortalV2 GameNetPortal;
+        private ClientNetPortalV2 ClientNetPortal;
         
         private void Start()
         {
-            gameNetPortal = GameNetPortalV2.Instance;
-            clientNetPortal = ClientNetPortalV2.Instance;
+            GameNetPortal = GameNetPortalV2.Instance;
+            ClientNetPortal = ClientNetPortalV2.Instance;
             
             HostButton.onClick.AddListener(OnHostClicked);
             ClientButton.onClick.AddListener(OnClientClicked);
         }
-        
-        //RETRIEVE HOST NAME
-        //private static string clientInputName = string.Empty;
-        //public static string GetInputName() => clientInputName;
 
         private void OnHostClicked()
         {
             if (!ValidNameInput()) return;
-            //clientInputName = nameInputField.text;
-            gameNetPortal.SaveClientData(nameInputField.text);
+            GameNetPortal.SaveClientData(nameInputField.text);
             NetworkManager.Singleton.StartHost();
         }
 
         private void OnClientClicked()
         {
             if (!ValidNameInput()) return;
-            clientNetPortal.StartClient(nameInputField.text);
+            ClientNetPortal.StartClient(nameInputField.text);
         }
 
         private bool ValidNameInput()
