@@ -2464,6 +2464,7 @@ GameObject:
   - component: {fileID: 522670554499875948}
   - component: {fileID: 1834002188342285950}
   - component: {fileID: 3894335190666047075}
+  - component: {fileID: 2899546894634152530}
   m_Layer: 8
   m_Name: PlayerArmatureV2
   m_TagString: Player
@@ -2617,6 +2618,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   MoveValue: {x: 0, y: 0}
+  Look: {x: 0, y: 0}
 --- !u!114 &3894335190666047075
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -2630,7 +2632,8 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   speedChangeRate: 10
-  speed: 2
+  rotationSmoothTime: 0.12
+  moveSpeed: 2
   sprintSpeed: 5.335
   rotationSpeed: 1.5
   networkPlayerState:
@@ -2643,8 +2646,26 @@ MonoBehaviour:
     m_InternalValue: 0
   leftRightPosition:
     m_InternalValue: 0
+  CinemachineCameraTarget: {fileID: 0}
   CineCamera: {fileID: 0}
   Camera: {fileID: 0}
+--- !u!114 &2899546894634152530
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 7755349470937509532}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e3cd64b01adabd644a24d9809ab28e29, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  CinemachineCameraTarget: {fileID: 2690498857653737415}
+  CineCamera: {fileID: 0}
+  Camera: {fileID: 0}
+  TopClamp: 70
+  BottomClamp: -30
 --- !u!1 &7787590526335659233
 GameObject:
   m_ObjectHideFlags: 0
