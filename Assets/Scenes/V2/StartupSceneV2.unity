@@ -487,6 +487,12 @@ PrefabInstance:
       propertyPath: m_Name
       value: NetworkManagerV2
       objectReference: {fileID: 0}
+    - target: {fileID: 4783155215940942210, guid: e608f2add0dc4f9419b81a5223f19a17,
+        type: 3}
+      propertyPath: NetworkConfig.PlayerPrefab
+      value: 
+      objectReference: {fileID: 4468798081468925419, guid: 8801412a551583a4d8a3f7969e72a20c,
+        type: 3}
     - target: {fileID: 4783155215940942211, guid: e608f2add0dc4f9419b81a5223f19a17,
         type: 3}
       propertyPath: m_RootOrder

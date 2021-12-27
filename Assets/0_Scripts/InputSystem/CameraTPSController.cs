@@ -1,3 +1,4 @@
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using Unity.Netcode;
@@ -23,8 +24,7 @@ namespace KaizerWaldCode
         public float TopClamp = 70.0f;
         [Tooltip("How far in degrees can you move the camera down")]
         public float BottomClamp = -30.0f;
-        
-        private InputAction PlayerCtrlLook;
+
         
         private bool HasOwnership => NetworkManager.Singleton.IsHost ? IsHost && IsOwner : IsClient && IsOwner;
 
@@ -33,22 +33,18 @@ namespace KaizerWaldCode
             InputStarter = GetComponent<PlayerInputController>();
             CineCamera = GetComponentInChildren<CinemachineVirtualCamera>().gameObject;
             Camera = GetComponentInChildren<CinemachineBrain>().gameObject;
-            //LastCursorPosition = Mouse.current.position.ReadValue();
-            PlayerCtrlLook = InputStarter.PlayerCtrl.Player.Look;
         }
         
         public override void OnNetworkSpawn()
         {
             enabled = HasOwnership;
             NetManager = NetworkManager.Singleton;
+            CinemachineCameraTarget.SetActive(HasOwnership);
             CineCamera.SetActive(HasOwnership);
             Camera.SetActive(HasOwnership);
-            if(HasOwnership) PlayerCtrlLook.performed += CameraRotation;
         }
 
-        public override void OnNetworkDespawn() => PlayerCtrlLook.performed -= CameraRotation;
-
-        public override void OnDestroy() => PlayerCtrlLook.performed -= CameraRotation;
+        private void LateUpdate() => CameraRotation();
 
         private static float ClampAngle(float lfAngle, float lfMin, float lfMax)
         {
@@ -57,14 +53,16 @@ namespace KaizerWaldCode
             return Mathf.Clamp(lfAngle, lfMin, lfMax);
         }
         
-        private void CameraRotation(InputAction.CallbackContext ctx)
+        private void CameraRotation()
         {
-            Vector2 inputLook = ctx.ReadValue<Vector2>();
+            Vector2 inputLook = InputStarter.Look;
             //Debug.Log($"Input look = {InputStarter.Look}");
-
-            //Debug.Log($"current magn = {InputStarter.Look.sqrMagnitude}");
-            CinemachineTargetYaw += inputLook.x * NetManager.ServerTime.FixedDeltaTime;
-            CinemachineTargetPitch += inputLook.y * NetManager.ServerTime.FixedDeltaTime;
+            if (inputLook.sqrMagnitude >= 0.01f)
+            {
+                //Debug.Log($"current magn = {inputLook.sqrMagnitude}");
+                CinemachineTargetYaw += inputLook.x * Time.deltaTime;
+                CinemachineTargetPitch += inputLook.y * Time.deltaTime;
+            }
 
             // clamp our rotations so our values are limited 360 degrees
             CinemachineTargetYaw = ClampAngle(CinemachineTargetYaw, float.MinValue, float.MaxValue);
@@ -72,6 +70,7 @@ namespace KaizerWaldCode
 
             // Cinemachine will follow this target
             CinemachineCameraTarget.transform.rotation = Quaternion.Euler(CinemachineTargetPitch, CinemachineTargetYaw, 0.0f);
+            
         }
     }
 }

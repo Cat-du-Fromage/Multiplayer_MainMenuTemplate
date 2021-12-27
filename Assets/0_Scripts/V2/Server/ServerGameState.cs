@@ -92,8 +92,6 @@ namespace KaizerWaldCode.V2
             Transform spawnPoint = PlayerSpawnPointsList[index];
             PlayerSpawnPointsList.RemoveAt(index);
             
-            NetworkObject playerNetworkObject = NetworkManager.Singleton.SpawnManager.GetPlayerNetworkObject(clientId);
-            
             NetworkObject newPlayer = Instantiate(playerPrefab, spawnPoint.position, spawnPoint.rotation);
             
             newPlayer.SpawnWithOwnership(clientId, true);

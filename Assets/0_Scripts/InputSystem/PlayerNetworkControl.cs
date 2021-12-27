@@ -6,7 +6,9 @@ using UnityEngine;
 using Unity.Netcode;
 using UnityEngine.InputSystem;
 using StarterAssets;
+using Unity.Mathematics;
 using static Unity.Mathematics.math;
+using quaternion = Unity.Mathematics.quaternion;
 
 namespace KaizerWaldCode.V2
 {
@@ -20,6 +22,7 @@ namespace KaizerWaldCode.V2
             Walk,
             ReverseWalk
         }
+        private PlayerState OldPlayerState = PlayerState.Idle;
         
         [Tooltip("Acceleration and deceleration")] 
         public float speedChangeRate = 10.0f;
@@ -29,18 +32,19 @@ namespace KaizerWaldCode.V2
         
         [SerializeField] private float moveSpeed = 2.0f;
         [SerializeField] private float sprintSpeed = 5.335f;
-        [SerializeField] private float rotationSpeed = 1.5f;
 
+        [SerializeField] private NetworkVariable<float> AnimationBlend = new NetworkVariable<float>(0.0f);
+        
         [SerializeField] private NetworkVariable<PlayerState> networkPlayerState = new NetworkVariable<PlayerState>();
         
-        [SerializeField] private NetworkVariable<Vector3> networkPosition, networkRotation = new NetworkVariable<Vector3>();
+        [SerializeField] private NetworkVariable<Vector3> networkPosition = new NetworkVariable<Vector3>();
 
-        //[SerializeField] private NetworkVariable<Quaternion> netRotationQuaternion = new NetworkVariable<Quaternion>();
-
-        [SerializeField] private NetworkVariable<float> forwardBackPosition, leftRightPosition = new NetworkVariable<float>();
-
-        // animation IDs
+        [SerializeField] private NetworkVariable<Quaternion> netRotationQuaternion = new NetworkVariable<Quaternion>();
         
+        [SerializeField] private NetworkVariable<Matrix4x4> netMatrix = new NetworkVariable<Matrix4x4>();
+        private float TargetSpeed => Keyboard.current.leftShiftKey.isPressed ? sprintSpeed : moveSpeed;
+        
+        // animation IDs
         private int AnimIDSpeed;
         private int AnimIDGrounded;
         private int AnimIDJump;
@@ -49,26 +53,19 @@ namespace KaizerWaldCode.V2
         
         //Player
         private float Speed;
-        private float AnimationBlend;
+        //private float AnimationBlend;
         private float TargetRotation = 0.0f;
         private float RotationVelocity;
-        private float VerticalVelocity;
+        private float VerticalVelocity = 0.0f;
         private float TerminalVelocity = 53.0f;
-        
-        //Client caching
-        private Vector3 OldInputPosition;
-        private Vector3 OldInputRotation;
-        
+
         private Animator PlayerAnimator;
         private PlayerInputController InputStarter;
         private CharacterController Controller;
-        
-        public GameObject CinemachineCameraTarget;
-        public GameObject CineCamera;
         public GameObject Camera;
-        
 
         private bool HasOwnership => NetworkManager.Singleton.IsHost ? IsHost && IsOwner : IsClient && IsOwner;
+        private Vector2 InputMove => InputStarter.MoveValue;
         
         private void Awake()
         {
@@ -76,29 +73,96 @@ namespace KaizerWaldCode.V2
             InputStarter = GetComponent<PlayerInputController>();
             Controller = GetComponent<CharacterController>();
             
-            CineCamera = GetComponentInChildren<CinemachineVirtualCamera>().gameObject;
-            Camera = GetComponentInChildren<CinemachineBrain>().gameObject;
-
             AssignAnimationIDs();
         }
 
         public override void OnNetworkSpawn()
         {
             NetManager = NetworkManager.Singleton;
-            CineCamera.SetActive(HasOwnership);
-            Camera.SetActive(HasOwnership);
+            networkPlayerState.OnValueChanged += UpdateVisualsTest;
+            AnimationBlend.OnValueChanged += UpdateVisualsTest2;
+            netMatrix.OnValueChanged += TestMatrixTransform;
+            if (!HasOwnership) return;
+            Camera = GetComponentInChildren<CinemachineBrain>().gameObject;
         }
-/*
+
+        private void TestMatrixTransform(Matrix4x4 previousvalue, Matrix4x4 newvalue)
+        {
+            Debug.Log($"New Pos = {newvalue.GetPosition()}; new rot = {newvalue.rotation}");
+            //Controller.transform.SetPositionAndRotation(newvalue.GetPosition(), newvalue.rotation);
+            Controller.transform.rotation = newvalue.rotation;
+            Controller.Move(newvalue.GetPosition());
+            //transform.SetPositionAndRotation(newvalue.GetPosition(), newvalue.rotation);
+        }
+
+        public override void OnDestroy()
+        {
+            networkPlayerState.OnValueChanged -= UpdateVisualsTest;
+            AnimationBlend.OnValueChanged -= UpdateVisualsTest2;
+            netMatrix.OnValueChanged -= TestMatrixTransform;
+        }
+
+        public override void OnNetworkDespawn()
+        {
+            networkPlayerState.OnValueChanged -= UpdateVisualsTest;
+            AnimationBlend.OnValueChanged -= UpdateVisualsTest2;
+            netMatrix.OnValueChanged -= TestMatrixTransform;
+        }
+
+        private void UpdateVisualsTest2(float previousValue, float newValue)
+        {
+            
+            if (newValue <= previousValue - float.Epsilon || newValue == 0.0f)
+            {
+                Debug.Log($"Stop Start {newValue}");
+                if (newValue == 0)
+                {
+                    Debug.Log($"Stop Value == 0 {newValue}");
+                    PlayerAnimator.SetFloat(AnimIDSpeed, newValue);
+                    PlayerAnimator.SetFloat(AnimIDMotionSpeed, 1);
+                    return;
+                }
+                Debug.Log($"Stop Value != 0 {newValue}");
+                AnimationBlendServerRpc(0.0f);
+                PlayerAnimator.SetFloat(AnimIDSpeed, newValue);
+                PlayerAnimator.SetFloat(AnimIDMotionSpeed, 1);
+                return;
+            }
+            PlayerAnimator.SetFloat(AnimIDSpeed, newValue);
+            PlayerAnimator.SetFloat(AnimIDMotionSpeed, 1);
+
+            float animationSpeed = (InputMove == Vector2.zero) ? 0.0f : TargetSpeed;
+            //Debug.Log($"anim Speed = {animationSpeed}");
+            float newAnimBlend = Mathf.Lerp(newValue, animationSpeed, Time.deltaTime * speedChangeRate);
+            //we only have idle or move (may have to go back to switch case)
+            
+            AnimationBlendServerRpc(newAnimBlend);
+        }
+        
+        private void UpdateVisualsTest(PlayerState previousValue, PlayerState newValue)
+        {
+            
+            float animationSpeed = (InputMove == Vector2.zero) ? 0.0f : TargetSpeed;
+            if (newValue == PlayerState.Idle) animationSpeed = 0.0f;
+            //Debug.Log($"anim Speed = {animationSpeed}");
+            float newAnimBlend = Mathf.Lerp(AnimationBlend.Value, animationSpeed, Time.deltaTime * speedChangeRate);
+            //we only have idle or move (may have to go back to switch case)
+            AnimationBlendServerRpc(newAnimBlend);
+            //PlayerAnimator.SetFloat(AnimIDSpeed, AnimationBlend.Value);
+            //PlayerAnimator.SetFloat(AnimIDMotionSpeed, 1);
+        }
+
+
         private void Update()
         {
             if (IsClient && IsOwner)
             {
                 ClientInput();
             }
-            OtherClientsUpdateTransform();
-            ClientVisuals();
+            //ClientVisuals();
+            //OtherClientsUpdateTransform();
         }
-        */
+        
         private void AssignAnimationIDs()
         {
             AnimIDSpeed = Animator.StringToHash("Speed");
@@ -110,80 +174,19 @@ namespace KaizerWaldCode.V2
 
         private void ClientInput()
         {
-            Test();
-            /*
-            //Player Position and Rotation
-            Vector3 inputRotation = new Vector3(0, InputStarter.Horizontal, 0);
+            if (InputMove == Vector2.zero /*&& networkPosition.Value == Vector3.zero*/) return;
 
-            Vector3 direction = transform.TransformDirection(Vector3.forward);
-            float forwardInput = InputStarter.Vertical;
-            
-            Vector3 inputPosition = direction * forwardInput;
-            
-            float targetSpeed = Keyboard.current.leftShiftKey.isPressed ? sprintSpeed : moveSpeed;
-            if (OldInputPosition != inputPosition || OldInputRotation != inputRotation)
+            if (InputMove == Vector2.zero /*&& networkPosition.Value != Vector3.zero*/)
             {
-                OldInputPosition = inputPosition;
-                OldInputRotation = inputRotation;
-                UpdateClientTransformServerRpc(inputPosition * targetSpeed, inputRotation * targetSpeed);
-            }
-            UpdatePlayerState(forwardInput);
-            */
-        }
-        
-
-        private void Test()
-        {
-            Vector3 posInput = Vector3.zero;
-            Vector3 rotInput = Vector3.zero;
-            
-            //POSITION
-            float targetSpeed = Keyboard.current.leftShiftKey.isPressed ? sprintSpeed : moveSpeed;
-            
-            // if there is no input, set the target speed to 0
-            if (InputStarter.MoveValue == Vector2.zero) targetSpeed = 0.0f;
-
-            // a reference to the players current horizontal velocity
-            Vector3 charCtrlVelocity = Controller.velocity;
-            float currentHorizontalSpeed = new Vector3(charCtrlVelocity.x, 0.0f, charCtrlVelocity.z).magnitude;
-            const float speedOffset = 0.1f;
-
-            // accelerate or decelerate to target speed
-            if (currentHorizontalSpeed < targetSpeed - speedOffset || currentHorizontalSpeed > targetSpeed + speedOffset)
-            {
-                // creates curved result rather than a linear one giving a more organic speed change
-                // note T in Lerp is clamped, so we don't need to clamp our speed
-                Speed = Mathf.Lerp(currentHorizontalSpeed, targetSpeed, NetManager.ServerTime.FixedDeltaTime * speedChangeRate);
-
-                // round speed to 3 decimal places
-                Speed = Mathf.Round(Speed * 1000f) / 1000f;
+                UpdateClientTransformServerRpc(Vector3.zero, Quaternion.identity);
+                UpdatePlayerState(0);
             }
             else
             {
-                Speed = targetSpeed;
+                Move();
+                UpdatePlayerState(1);
             }
-            // normalise input direction
-            Vector3 inputDirection = new Vector3(InputStarter.MoveValue.x, 0.0f, InputStarter.MoveValue.y).normalized;
-            
-            
-            
-            //ROTATION
-            if (InputStarter.MoveValue != Vector2.zero)
-            {
-                //TargetRotation = Mathf.Atan2(inputDirection.x, inputDirection.z) * Mathf.Rad2Deg;
-                TargetRotation = atan2(inputDirection.x, inputDirection.z);
-                float rotation = Mathf.SmoothDampAngle(transform.eulerAngles.y, TargetRotation, ref RotationVelocity, rotationSmoothTime);
-
-                // rotate to face input direction relative to camera position
-                rotInput = new Vector3(0.0f, rotation, 0.0f);
-            }
-            
-            //=============================================================================================
-            Vector3 targetDirection = Quaternion.Euler(0.0f, TargetRotation, 0.0f) * Vector3.forward;
-            //Debug.Log($"Networktime = {NetManager.ServerTime.FixedDeltaTime} normalTime = {Time.deltaTime}");
-            posInput = targetDirection.normalized * (Speed * NetManager.ServerTime.FixedDeltaTime) + new Vector3(0.0f, VerticalVelocity, 0.0f) * (NetManager.ServerTime.FixedDeltaTime);
-            
-            UpdateClientTransformServerRpc(posInput,rotInput);
+                
         }
 
         private void UpdatePlayerState(float forwardInput)
@@ -204,56 +207,102 @@ namespace KaizerWaldCode.V2
 
         private void OtherClientsUpdateTransform()
         {
-            Controller.Move(networkPosition.Value);
-
-            transform.rotation = Quaternion.Euler(networkRotation.Value);
-        }
-
-        private void ClientMoveAndRotate()
-        {
+            if (netRotationQuaternion.Value != Quaternion.identity)
+                transform.rotation = netRotationQuaternion.Value;
             if (networkPosition.Value != Vector3.zero)
-            {
-                Controller.SimpleMove(networkPosition.Value);
-            }
-            if (networkRotation.Value != Vector3.zero)
-            {
-                transform.Rotate(networkRotation.Value);
-            }
+                Controller.Move(networkPosition.Value);
         }
-
+/*
         private void ClientVisuals()
         {
-            float targetSpeed = Keyboard.current.leftShiftKey.isPressed ? sprintSpeed : moveSpeed;
-            AnimationBlend = Mathf.Lerp(AnimationBlend, targetSpeed, Time.deltaTime * speedChangeRate);
+            float animationSpeed = (InputMove == Vector2.zero) ? 0.0f : TargetSpeed;
+            AnimationBlend = Mathf.Lerp(AnimationBlend, animationSpeed, Time.deltaTime * speedChangeRate);
+            //we only have idle or move (may have to go back to switch case)
+            PlayerAnimator.SetFloat(AnimIDSpeed, AnimationBlend);
+            PlayerAnimator.SetFloat(AnimIDMotionSpeed, 1);
             
-            if (networkPlayerState.Value == PlayerState.Walk)
+            switch (networkPlayerState.Value)
             {
-                PlayerAnimator.SetFloat(AnimIDSpeed, AnimationBlend);
-                PlayerAnimator.SetFloat(AnimIDMotionSpeed, 1);
+                case PlayerState.Walk:
+                    PlayerAnimator.SetFloat(AnimIDSpeed, AnimationBlend);
+                    PlayerAnimator.SetFloat(AnimIDMotionSpeed, 1);
+                    break;
+                case PlayerState.ReverseWalk:
+                    PlayerAnimator.SetFloat(AnimIDSpeed, AnimationBlend);
+                    PlayerAnimator.SetFloat(AnimIDMotionSpeed, 1);
+                    break;
+                default:
+                    PlayerAnimator.SetFloat(AnimIDSpeed, AnimationBlend);
+                    PlayerAnimator.SetFloat(AnimIDMotionSpeed, 1);
+                    break;
             }
-            else if (networkPlayerState.Value == PlayerState.ReverseWalk)
+            
+        }
+*/
+        private void Move()
+        {
+            float targetSpeed = GetSpeed();
+            Vector3 inputDirection = new Vector3(InputMove.x, 0.0f, InputMove.y).normalized;
+            
+            TargetRotation = degrees(Mathf.Atan2(inputDirection.x, inputDirection.z)) + Camera.transform.eulerAngles.y;
+            float rotation = Mathf.SmoothDampAngle(transform.eulerAngles.y, TargetRotation, ref RotationVelocity, rotationSmoothTime);
+            
+            // rotate to face input direction relative to camera position
+            Vector3 targetDirection = Quaternion.Euler(0.0f, TargetRotation, 0.0f) * Vector3.forward;
+            
+            Quaternion rotInput = Quaternion.Euler(0.0f, rotation, 0.0f);
+            Vector3 posInput = targetDirection.normalized * (targetSpeed * Time.deltaTime) /*+ new Vector3(0.0f, VerticalVelocity, 0.0f) * NetManager.LocalTime.FixedDeltaTime*/;
+            //Matrix4x4 newmat = new Matrix4x4();
+            //Debug.Log($"new mat pos = {posInput}");
+            //newmat.SetTRS(posInput, rotInput, Vector3.one);
+            Transform newTransform = Controller.transform;
+            newTransform.SetPositionAndRotation(posInput, rotInput);
+            //Debug.Log($"new mat pos = {newTransform.localToWorldMatrix.GetPosition()}");
+            UpdateClientMatrixServerRpc(newTransform.localToWorldMatrix);
+            //UpdateClientTransformServerRpc(posInput, rotInput);
+        }
+
+        private float GetSpeed()
+        {
+            float currentSpeed = (InputMove == Vector2.zero) ? 0.0f : TargetSpeed;
+            Vector3 velocity = Controller.velocity;
+            float currentHorizontalSpeed = new Vector3(velocity.x, 0.0f, velocity.z).magnitude;
+            if (currentHorizontalSpeed < currentSpeed - 0.1f || currentHorizontalSpeed > currentSpeed + 0.1f)
             {
-                PlayerAnimator.SetFloat(AnimIDSpeed, AnimationBlend);
-                PlayerAnimator.SetFloat(AnimIDMotionSpeed, 1);
+                // creates curved result rather than a linear one giving a more organic speed change
+                // note T in Lerp is clamped, so we don't need to clamp our speed
+                Speed = Mathf.Lerp(currentHorizontalSpeed, currentSpeed, Time.deltaTime * speedChangeRate);
+
+                // round speed to 3 decimal places
+                Speed = Mathf.Round(Speed * 1000f) / 1000f;
             }
             else
             {
-                PlayerAnimator.SetFloat(AnimIDSpeed, 0);
-                PlayerAnimator.SetFloat(AnimIDMotionSpeed, 0);
+                Speed = currentSpeed;
             }
+            return Speed;
         }
-
+        
         [ServerRpc]
-        private void UpdateClientTransformServerRpc(Vector3 newPosition, Vector3 newRotation)
+        private void UpdateClientTransformServerRpc(Vector3 newPosition, Quaternion newRotation)
         {
             networkPosition.Value = newPosition;
-            networkRotation.Value = newRotation;
+            netRotationQuaternion.Value = newRotation;
+        }
+        
+        [ServerRpc]
+        private void UpdateClientMatrixServerRpc(Matrix4x4 newTransform)
+        {
+            netMatrix.Value = newTransform;
         }
 
         [ServerRpc]
-        private void UpdatePlayerStateServerRpc(PlayerState newState)
+        private void UpdatePlayerStateServerRpc(PlayerState newState) => networkPlayerState.Value = newState;
+        
+        [ServerRpc]
+        private void AnimationBlendServerRpc(float newValue)
         {
-            networkPlayerState.Value = newState;
+            AnimationBlend.Value = newValue;
         }
     }
 }

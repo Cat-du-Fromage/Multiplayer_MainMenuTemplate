@@ -7,12 +7,12 @@
             "actions": [
                 {
                     "name": "WASD",
-                    "type": "PassThrough",
+                    "type": "Value",
                     "id": "162427ea-ca8f-4a61-a366-26e6c9c1857a",
                     "expectedControlType": "Vector2",
                     "processors": "",
                     "interactions": "",
-                    "initialStateCheck": false
+                    "initialStateCheck": true
                 },
                 {
                     "name": "Look",
@@ -22,13 +22,22 @@
                     "processors": "",
                     "interactions": "",
                     "initialStateCheck": true
+                },
+                {
+                    "name": "Run",
+                    "type": "Button",
+                    "id": "7f65bc04-3e6f-418a-adca-ec5bc5322704",
+                    "expectedControlType": "Button",
+                    "processors": "",
+                    "interactions": "",
+                    "initialStateCheck": false
                 }
             ],
             "bindings": [
                 {
                     "name": "2D Vector",
                     "id": "fa65a05b-1c72-4596-aa83-8c140ac68f46",
-                    "path": "2DVector",
+                    "path": "2DVector(mode=1)",
                     "interactions": "",
                     "processors": "",
                     "groups": "",
@@ -88,6 +97,17 @@
                     "processors": "InvertVector2(invertX=false),ScaleVector2(x=15,y=15)",
                     "groups": "KeyboardMouse",
                     "action": "Look",
+                    "isComposite": false,
+                    "isPartOfComposite": false
+                },
+                {
+                    "name": "",
+                    "id": "a058a203-a695-4d2e-bb24-f296f93c3afa",
+                    "path": "<Keyboard>/shift",
+                    "interactions": "",
+                    "processors": "",
+                    "groups": "",
+                    "action": "Run",
                     "isComposite": false,
                     "isPartOfComposite": false
                 }
